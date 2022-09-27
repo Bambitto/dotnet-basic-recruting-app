@@ -1,5 +1,6 @@
+using FluentValidation;
 using MatchDataManager.Api.Models;
-using MatchDataManager.Api.Repositories;
+using MatchDataManager.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MatchDataManager.Api.Controllers;
@@ -8,30 +9,46 @@ namespace MatchDataManager.Api.Controllers;
 [Route("[controller]")]
 public class LocationsController : ControllerBase
 {
-    [HttpPost]
-    public IActionResult AddLocation(Location location)
+    private readonly ILocationService _locationService;
+    private readonly IValidator<Location> _validator;
+    public LocationsController(ILocationService locationService, IValidator<Location> validator)
     {
-        LocationsRepository.AddLocation(location);
-        return CreatedAtAction(nameof(GetById), new {id = location.Id}, location);
+        _locationService = locationService;
+        _validator = validator;
+    }
+    [HttpPost]
+    public async Task<IActionResult> AddLocation(Location location)
+    {
+        var result = await _validator.ValidateAsync(location);
+        if (!result.IsValid)
+        {
+            return BadRequest(result);
+        }
+        if (await _locationService.CreateAsync(location))
+        {
+            return Ok();
+        }
+        return BadRequest("Something went wrong");
     }
 
     [HttpDelete]
-    public IActionResult DeleteLocation(Guid locationId)
+    public async Task<IActionResult> DeleteLocation(Guid locationId)
     {
-        LocationsRepository.DeleteLocation(locationId);
-        return NoContent();
+        await _locationService.Delete(locationId);
+        return Ok();
     }
 
     [HttpGet]
-    public IActionResult Get()
+    public async Task<IActionResult> Get()
     {
-        return Ok(LocationsRepository.GetAllLocations());
+        var result = await _locationService.GetAllAsync();
+        return Ok(result);
     }
 
     [HttpGet("{id:guid}")]
-    public IActionResult GetById(Guid id)
+    public async Task<IActionResult> GetById(Guid id)
     {
-        var location = LocationsRepository.GetLocationById(id);
+        var location = await _locationService.GetAsync(id);
         if (location is null)
         {
             return NotFound();
@@ -41,9 +58,14 @@ public class LocationsController : ControllerBase
     }
 
     [HttpPut]
-    public IActionResult UpdateLocation(Location location)
+    public async Task<IActionResult> UpdateLocation(Location location)
     {
-        LocationsRepository.UpdateLocation(location);
-        return Ok(location);
+        var result = await _validator.ValidateAsync(location);
+        if (!result.IsValid)
+        {
+            return BadRequest(result);
+        }
+        await _locationService.Update(location);
+        return Ok();
     }
 }
